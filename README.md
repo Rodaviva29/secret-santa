@@ -10,6 +10,9 @@ pairings**, and delivers results via a **reveal page** or **WhatsApp**.
 
 Rewritten from the ground up: from an Express prototype → **Next.js 15 · React 19 · Better Auth · Postgres/Drizzle**. Dockerised, deploy-ready for **Coolify**. 🐳
 
+<img width="1774" height="887" alt="f70372d1-e83c-4261-a849-4ac7585abdcd" src="https://github.com/user-attachments/assets/60d4588b-b22e-41b8-ad23-272ee3500aec" />
+
+
 <br>
 
 ![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
