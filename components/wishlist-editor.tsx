@@ -42,7 +42,7 @@ export function WishlistEditor({ initial }: { initial: WishlistItem[] }) {
       <ul className="space-y-2">
         {items.length === 0 && (
           <li className="text-sm text-muted-foreground">
-            Nothing yet — add what you&apos;d like to receive.
+            Nothing yet, add what you&apos;d like to receive.
           </li>
         )}
         {items.map((i) => (

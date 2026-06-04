@@ -36,6 +36,7 @@ import type {
 import type { OgSettings } from "@/lib/settings";
 import type { DrawPairs } from "@/lib/pairings";
 import { OgSettingsForm } from "@/components/og-settings";
+import { formatPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 interface UserOption {
@@ -293,7 +294,7 @@ export function AdminPanel({
                     <span>
                       {p.name}
                       {p.phone ? (
-                        <span className="text-muted-foreground"> · {p.phone}</span>
+                        <span className="text-muted-foreground"> · {formatPhone(p.phone)}</span>
                       ) : (
                         <span className="text-muted-foreground"> · no phone</span>
                       )}

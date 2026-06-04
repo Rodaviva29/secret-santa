@@ -109,3 +109,14 @@ export function splitPhone(stored: string | null | undefined): {
 export function joinPhone(code: string, number: string): string {
   return `${digitsOnly(code)}${digitsOnly(number)}`;
 }
+
+/**
+ * Format a stored phone number for display: "+351 968 392 900".
+ * The local number is split into groups of 3 digits separated by spaces.
+ */
+export function formatPhone(stored: string | null | undefined): string {
+  if (!stored) return "";
+  const { code, number } = splitPhone(stored);
+  const formatted = number.replace(/(\d{3})(?=\d)/g, "$1 ");
+  return `+${code} ${formatted}`;
+}
