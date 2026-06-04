@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "crypto";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import type { Draw, Participant } from "@/lib/db/schema";
 import { DrawError, runDraw } from "@/lib/draw";
@@ -43,15 +43,33 @@ export async function executeDraw(draw: Draw): Promise<ExecuteResult> {
   }
 
   const exclusions = await db.select().from(schema.exclusion);
-  // History = assignments from *other* draws (avoid repeating last time).
-  const history = await db.select().from(schema.assignment);
+
+  // History soft-constraint: avoid pairings from the most recent
+  // `historyDepth` other draws. 0 = disabled.
+  let history: Array<[number, number]> = [];
+  if (draw.historyDepth > 0) {
+    const recentDraws = await db
+      .select({ id: schema.draw.id })
+      .from(schema.draw)
+      .orderBy(desc(schema.draw.createdAt));
+    const recentIds = new Set(
+      recentDraws
+        .filter((d) => d.id !== draw.id)
+        .slice(0, draw.historyDepth)
+        .map((d) => d.id),
+    );
+    if (recentIds.size > 0) {
+      const assignments = await db.select().from(schema.assignment);
+      history = assignments
+        .filter((h) => recentIds.has(h.drawId))
+        .map((h) => [h.giverId, h.receiverId] as [number, number]);
+    }
+  }
 
   const result = runDraw(
     participants.map((p) => p.id),
     exclusions.map((e) => [e.aId, e.bId] as [number, number]),
-    history
-      .filter((h) => h.drawId !== draw.id)
-      .map((h) => [h.giverId, h.receiverId] as [number, number]),
+    history,
     { allowSelfDraw: draw.allowSelfDraw },
   );
 
@@ -67,8 +85,8 @@ export async function executeDraw(draw: Draw): Promise<ExecuteResult> {
   const base = appBaseUrl();
   const delivery: DeliverySummary = { whatsapp: null, email: null, push: null };
 
-  // ---- WhatsApp (only for wa_* delivery modes) ----
-  if (draw.deliveryMode !== "reveal" && isWhatsAppConfigured()) {
+  // ---- WhatsApp (channel-gated) — sends the match's name directly ----
+  if (draw.deliverWhatsapp && isWhatsAppConfigured()) {
     const inputs: SendInput[] = [];
     const skipped: string[] = [];
     for (const r of rows) {
@@ -81,10 +99,7 @@ export async function executeDraw(draw: Draw): Promise<ExecuteResult> {
       inputs.push({
         to: giver.phone,
         giverName: giver.name,
-        secondParam:
-          draw.deliveryMode === "wa_direct"
-            ? receiver.name
-            : `${base}/reveal/${r.revealToken}`,
+        secondParam: receiver.name,
       });
     }
     const results = await sendBatch(inputs);
@@ -98,12 +113,9 @@ export async function executeDraw(draw: Draw): Promise<ExecuteResult> {
     };
   }
 
-  // ---- Email notification (config-gated, all modes) ----
-  if (isEmailConfigured()) {
-    const userIds = [...new Set(participants.map((p) => p.userId).filter(Boolean))] as string[];
-    const users = userIds.length
-      ? await db.select().from(schema.user)
-      : [];
+  // ---- Email (channel-gated) — names the match directly ----
+  if (draw.deliverEmail && isEmailConfigured()) {
+    const users = await db.select().from(schema.user);
     const emailByParticipant = new Map<number, string>();
     for (const p of participants) {
       if (!p.userId) continue;
@@ -115,10 +127,13 @@ export async function executeDraw(draw: Draw): Promise<ExecuteResult> {
         const to = emailByParticipant.get(r.giverId);
         if (!to) return null;
         const giver = byId.get(r.giverId)!;
+        const receiver = byId.get(r.receiverId)!;
+        const budgetLine =
+          draw.budget != null ? ` The budget is ${draw.budget}.` : "";
         return {
           to,
-          subject: `🎁 ${draw.name}: your secret santa is ready`,
-          text: `Hi ${giver.name}! Your secret santa match for "${draw.name}" is ready. Open your private link to see who you got: ${base}/reveal/${r.revealToken}`,
+          subject: `🎁 ${draw.name}: your secret santa match`,
+          text: `Hi ${giver.name}! For "${draw.name}", your secret santa match is ${receiver.name}.${budgetLine}`,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -131,18 +146,23 @@ export async function executeDraw(draw: Draw): Promise<ExecuteResult> {
     }
   }
 
-  // ---- Web Push (config-gated, all modes) ----
-  if (isPushConfigured()) {
-    const giverUserIds = rows
-      .map((r) => byId.get(r.giverId)?.userId)
-      .filter((x): x is string => !!x);
-    if (giverUserIds.length) {
-      delivery.push = await pushToUsers(giverUserIds, {
+  // ---- Web Push (channel-gated) — names the match directly ----
+  if (draw.deliverPush && isPushConfigured()) {
+    let sent = 0;
+    let failed = 0;
+    for (const r of rows) {
+      const giver = byId.get(r.giverId)!;
+      const receiver = byId.get(r.receiverId)!;
+      if (!giver.userId) continue;
+      const res = await pushToUsers([giver.userId], {
         title: `🎁 ${draw.name}`,
-        body: "Your secret santa match is ready — tap to reveal.",
+        body: `Your secret santa match is ${receiver.name}.`,
         url: "/dashboard",
       });
+      sent += res.sent;
+      failed += res.failed;
     }
+    delivery.push = { sent, failed };
   }
 
   // Mark executed + completed.

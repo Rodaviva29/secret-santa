@@ -98,15 +98,28 @@ export const draw = pgTable("draw", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   budget: integer("budget"),
+  // Legacy single delivery mode. Superseded by the per-channel booleans
+  // below; kept for back-compat / existing rows.
   deliveryMode: text("delivery_mode")
     .$type<DeliveryMode>()
     .notNull()
     .default("reveal"),
-  // for `reveal` mode: max times a token may be viewed before it locks
+  // Delivery channels — any combination. The private reveal page/token is
+  // always generated; `deliverReveal` only controls whether participants
+  // are pointed at the shareable reveal link. WhatsApp/email/push each send
+  // the match's name directly when enabled.
+  deliverReveal: boolean("deliver_reveal").notNull().default(true),
+  deliverWhatsapp: boolean("deliver_whatsapp").notNull().default(false),
+  deliverEmail: boolean("deliver_email").notNull().default(false),
+  deliverPush: boolean("deliver_push").notNull().default(false),
+  // for the reveal page: max times a token may be viewed before it locks
   previewLimit: integer("preview_limit").notNull().default(3),
   // when true, a participant may be assigned to give a gift to themselves
   // (self-draw). Off by default — normal secret santa is a derangement.
   allowSelfDraw: boolean("allow_self_draw").notNull().default(false),
+  // How many previous draws to avoid repeating pairings from (soft
+  // constraint). 0 = disabled (default), 1 = last draw, 2 = last two, etc.
+  historyDepth: integer("history_depth").notNull().default(0),
   status: text("status").$type<DrawStatus>().notNull().default("draft"),
   // If set and the draw is still a draft, the in-process scheduler runs +
   // delivers the draw automatically at/after this time. Null = run now.

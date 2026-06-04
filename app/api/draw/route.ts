@@ -21,9 +21,15 @@ export async function GET() {
 const bodySchema = z.object({
   name: z.string().min(1),
   budget: z.number().int().nonnegative().nullable().optional(),
-  deliveryMode: z.enum(["reveal", "wa_link", "wa_direct"]),
+  // Delivery channels — any combination (reveal page always generated).
+  deliverReveal: z.boolean().default(true),
+  deliverWhatsapp: z.boolean().default(false),
+  deliverEmail: z.boolean().default(false),
+  deliverPush: z.boolean().default(false),
   previewLimit: z.number().int().positive().max(100).default(3),
   allowSelfDraw: z.boolean().default(false),
+  // 0 = don't avoid previous pairings; N = avoid the last N draws.
+  historyDepth: z.number().int().nonnegative().max(50).default(0),
   // ISO datetime string. When in the future the draw is created as a draft
   // and the scheduler runs it then; otherwise it runs immediately.
   scheduledAt: z.string().datetime().nullable().optional(),
@@ -39,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return badRequest("Invalid draw configuration.");
   const cfg = parsed.data;
 
-  if (cfg.deliveryMode !== "reveal" && !isWhatsAppConfigured()) {
+  if (cfg.deliverWhatsapp && !isWhatsAppConfigured()) {
     return badRequest(
       "WhatsApp delivery selected but WA_API_TOKEN / WA_PHONE_NUMBER_ID / WA_TEMPLATE_NAME are not set.",
     );
@@ -62,9 +68,13 @@ export async function POST(req: NextRequest) {
       .values({
         name: cfg.name,
         budget: cfg.budget ?? null,
-        deliveryMode: cfg.deliveryMode,
+        deliverReveal: cfg.deliverReveal,
+        deliverWhatsapp: cfg.deliverWhatsapp,
+        deliverEmail: cfg.deliverEmail,
+        deliverPush: cfg.deliverPush,
         previewLimit: cfg.previewLimit,
         allowSelfDraw: cfg.allowSelfDraw,
+        historyDepth: cfg.historyDepth,
         status: "draft",
         scheduledAt,
         pairsVisibleAt,
@@ -88,8 +98,7 @@ export async function POST(req: NextRequest) {
         draw: result.draw,
         assignments: result.assignments,
         delivery: result.delivery,
-        revealLinks:
-          cfg.deliveryMode === "reveal" ? result.revealLinks : undefined,
+        revealLinks: cfg.deliverReveal ? result.revealLinks : undefined,
       },
       { status: 201 },
     );

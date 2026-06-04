@@ -4,7 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { Gift } from "lucide-react";
 import { db, first, schema } from "@/lib/db";
 import { getCurrentUser, getOrCreateParticipant, isAdmin } from "@/lib/session";
-import { getVisiblePairings } from "@/lib/pairings";
+import { getMyMatchHistory, getVisiblePairings } from "@/lib/pairings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { WishlistEditor } from "@/components/wishlist-editor";
 import { PhoneEditor } from "@/components/phone-editor";
 import { PushToggle } from "@/components/push-toggle";
+import { PairingsCards } from "@/components/pairings-cards";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -61,15 +62,15 @@ export default async function DashboardPage() {
       )
     : undefined;
 
-  const receiverWishlist = receiver
-    ? await db
-        .select()
-        .from(schema.wishlistItem)
-        .where(eq(schema.wishlistItem.participantId, receiver.id))
-    : [];
-
   // Draws whose full pairing list has been made public.
   const visiblePairings = await getVisiblePairings();
+
+  // This participant's own match history (always visible to themselves).
+  const myHistory = participant
+    ? await getMyMatchHistory(participant.id)
+    : [];
+  // Older matches beyond the current "ready" card up top.
+  const pastMatches = myHistory.filter((m) => m.drawId !== latest?.drawId);
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-4 sm:p-8">
@@ -93,49 +94,54 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Your secret santa is ready 🎉</CardTitle>
             <CardDescription>
-              {myDraw.name} — you are giving a gift to…
+              {myDraw.name} — open your private link to see who you got and
+              their wishlist.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-2xl font-bold">{receiver.name}</p>
-
             {myDraw.budget != null && (
               <p className="text-sm text-muted-foreground">
                 Budget: <span className="font-medium">{myDraw.budget}</span>
               </p>
             )}
 
-            <div>
-              <h2 className="mb-2 text-sm font-medium">Their wishlist</h2>
-              {receiverWishlist.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No wishlist yet.</p>
-              ) : (
-                <ul className="space-y-1 text-sm">
-                  {receiverWishlist.map((w) => (
-                    <li key={w.id} className="rounded-md border px-3 py-2">
-                      {w.url ? (
-                        <a
-                          href={w.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline"
-                        >
-                          {w.text}
-                        </a>
-                      ) : (
-                        w.text
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <Button asChild variant="outline" size="sm">
+            <Button asChild>
               <Link href={`/reveal/${latest.revealToken}`}>
-                Open shareable reveal link
+                Open reveal link 🎁
               </Link>
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {pastMatches.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your draw history 🎄</CardTitle>
+            <CardDescription>
+              Everyone you&apos;ve been secret santa for.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {pastMatches.map((m) => (
+                <li
+                  key={m.drawId}
+                  className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                >
+                  <span>
+                    <span className="font-medium">{m.drawName}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {new Date(m.date).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <span className="text-right">
+                    <span className="text-muted-foreground">→ </span>
+                    <span className="font-medium">{m.receiver}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}
@@ -145,27 +151,12 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Pairings revealed 📜</CardTitle>
             <CardDescription>
-              These draws have had their full results made public.
+              These draws have had their full results made public, tap one to
+              see the pairings.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {visiblePairings.map(({ draw, pairs }) => (
-              <div key={draw.id}>
-                <h3 className="mb-1 text-sm font-medium">{draw.name}</h3>
-                <ul className="space-y-1 text-sm">
-                  {pairs.map((p, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-2 rounded-md border px-3 py-1.5"
-                    >
-                      <span className="font-medium">{p.giver}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span>{p.receiver}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          <CardContent>
+            <PairingsCards pairings={visiblePairings} />
           </CardContent>
         </Card>
       )}
@@ -174,7 +165,7 @@ export default async function DashboardPage() {
         <CardHeader>
           <CardTitle>Your wishlist</CardTitle>
           <CardDescription>
-            Your secret santa will see this — add some ideas.
+            Your secret santa will see this, add some ideas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -200,17 +191,19 @@ export default async function DashboardPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notifications</CardTitle>
-          <CardDescription>
-            Get a push notification on this device when your match is ready.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PushToggle />
-        </CardContent>
-      </Card>
+      {process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Notifications</CardTitle>
+            <CardDescription>
+              Get a push notification on this device when your match is ready.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PushToggle />
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }

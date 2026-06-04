@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "flag-icons/css/flag-icons.min.css";
+import "react-day-picker/style.css";
 import { getOgSettings } from "@/lib/settings";
 
 export async function generateMetadata(): Promise<Metadata> {

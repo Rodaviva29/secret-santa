@@ -46,12 +46,9 @@ export default async function RevealPage({
     db.select().from(schema.draw).where(eq(schema.draw.id, assignment.drawId)),
   );
 
-  // Enforce the per-draw preview limit (reveal mode only).
+  // Enforce the per-draw preview limit (reveal channel only).
   const limit = draw?.previewLimit ?? Infinity;
-  if (
-    draw?.deliveryMode === "reveal" &&
-    assignment.revealCount >= limit
-  ) {
+  if (draw?.deliverReveal && assignment.revealCount >= limit) {
     return (
       <Shell>
         <CardHeader>
@@ -84,10 +81,9 @@ export default async function RevealPage({
     .from(schema.wishlistItem)
     .where(eq(schema.wishlistItem.participantId, assignment.receiverId));
 
-  const viewsLeft =
-    draw?.deliveryMode === "reveal"
-      ? Math.max(0, limit - (assignment.revealCount + 1))
-      : null;
+  const viewsLeft = draw?.deliverReveal
+    ? Math.max(0, limit - (assignment.revealCount + 1))
+    : null;
 
   return (
     <Shell>

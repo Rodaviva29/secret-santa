@@ -19,6 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { DateTimePicker } from "@/components/ui/datetime-picker";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ChevronRight } from "lucide-react";
 import type {
   Draw,
   Exclusion,
@@ -75,6 +84,7 @@ export function AdminPanel({
 }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<"santa" | "technical">("santa");
+  const [historyOpenId, setHistoryOpenId] = useState<number | null>(null);
   const nameById = new Map(participants.map((p) => [p.id, p.name]));
   const userById = new Map(users.map((u) => [u.id, u]));
 
@@ -147,9 +157,14 @@ export function AdminPanel({
   /* -------- run draw -------- */
   const [drawName, setDrawName] = useState("");
   const [budget, setBudget] = useState("");
-  const [mode, setMode] = useState<"reveal" | "wa_link" | "wa_direct">("reveal");
+  // Delivery channels (any combination).
+  const [deliverReveal, setDeliverReveal] = useState(true);
+  const [deliverWhatsapp, setDeliverWhatsapp] = useState(false);
+  const [deliverEmail, setDeliverEmail] = useState(false);
+  const [deliverPush, setDeliverPush] = useState(false);
   const [previewLimit, setPreviewLimit] = useState("3");
   const [allowSelfDraw, setAllowSelfDraw] = useState(false);
+  const [historyDepth, setHistoryDepth] = useState("0");
   // datetime-local strings ("" = unset)
   const [scheduledAt, setScheduledAt] = useState("");
   const [pairsVisibleAt, setPairsVisibleAt] = useState("");
@@ -168,9 +183,13 @@ export function AdminPanel({
       body: JSON.stringify({
         name: drawName || "Secret Santa",
         budget: budget ? Number(budget) : null,
-        deliveryMode: mode,
+        deliverReveal,
+        deliverWhatsapp,
+        deliverEmail,
+        deliverPush,
         previewLimit: Number(previewLimit) || 3,
         allowSelfDraw,
+        historyDepth: Number(historyDepth) || 0,
         // datetime-local has no timezone; interpret as local, send ISO.
         scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         pairsVisibleAt: pairsVisibleAt
@@ -218,7 +237,38 @@ export function AdminPanel({
         </button>
       </div>
 
-      {tab === "technical" && <OgSettingsForm initial={og} />}
+      {tab === "technical" && (
+        <div className="space-y-6">
+          <OgSettingsForm initial={og} />
+
+          {/* Integrations status */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Integrations</CardTitle>
+              <CardDescription>
+                Configured via environment variables. Delivery/notifications
+                only fire for enabled channels.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-1 text-sm">
+                <li>
+                  WhatsApp: <IntegrationBadge on={integrations.whatsapp} />{" "}
+                  (WA_API_TOKEN…)
+                </li>
+                <li>
+                  Email (Resend): <IntegrationBadge on={integrations.email} />{" "}
+                  (RESEND_API_KEY, RESEND_FROM)
+                </li>
+                <li>
+                  Push (Web Push): <IntegrationBadge on={integrations.push} />{" "}
+                  (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {tab === "santa" && (
         <>
@@ -332,7 +382,7 @@ export function AdminPanel({
         <CardHeader>
           <CardTitle>Exclusions</CardTitle>
           <CardDescription>
-            Forbidden pairs — neither person will draw the other.
+            Forbidden pairs, neither person will draw the other.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -422,20 +472,51 @@ export function AdminPanel({
                   onChange={(e) => setBudget(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Delivery</Label>
-                <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="reveal">Reveal page (links)</SelectItem>
-                    <SelectItem value="wa_link">WhatsApp + reveal link</SelectItem>
-                    <SelectItem value="wa_direct">WhatsApp (name in message)</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-col gap-2 sm:col-span-2">
+                <Label>Delivery channels</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <DeliveryCheckbox
+                    label="Reveal link"
+                    hint="Private reveal page (always generated)"
+                    checked={deliverReveal}
+                    onChange={setDeliverReveal}
+                  />
+                  <DeliveryCheckbox
+                    label="WhatsApp"
+                    hint={
+                      integrations.whatsapp
+                        ? "Sends the match's name"
+                        : "Not configured"
+                    }
+                    checked={deliverWhatsapp}
+                    onChange={setDeliverWhatsapp}
+                    disabled={!integrations.whatsapp}
+                  />
+                  <DeliveryCheckbox
+                    label="Email"
+                    hint={
+                      integrations.email
+                        ? "Sends the match's name"
+                        : "Not configured"
+                    }
+                    checked={deliverEmail}
+                    onChange={setDeliverEmail}
+                    disabled={!integrations.email}
+                  />
+                  <DeliveryCheckbox
+                    label="Push"
+                    hint={
+                      integrations.push
+                        ? "Sends the match's name"
+                        : "Not configured"
+                    }
+                    checked={deliverPush}
+                    onChange={setDeliverPush}
+                    disabled={!integrations.push}
+                  />
+                </div>
               </div>
-              {mode === "reveal" && (
+              {deliverReveal && (
                 <div className="flex flex-col gap-2">
                   <Label>Preview limit</Label>
                   <Input
@@ -447,11 +528,23 @@ export function AdminPanel({
                 </div>
               )}
               <div className="flex flex-col gap-2">
-                <Label>Schedule (optional)</Label>
+                <Label>Avoid past pairings (draws)</Label>
                 <Input
-                  type="datetime-local"
+                  type="number"
+                  min={0}
+                  value={historyDepth}
+                  onChange={(e) => setHistoryDepth(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  0 = off · 1 = avoid last draw · 2 = last two, etc.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Schedule (optional)</Label>
+                <DateTimePicker
                   value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
+                  onChange={setScheduledAt}
+                  placeholder="Run now"
                 />
                 <p className="text-xs text-muted-foreground">
                   Leave empty to run now. Future = runs + delivers
@@ -460,10 +553,10 @@ export function AdminPanel({
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Reveal pairs to everyone (optional)</Label>
-                <Input
-                  type="datetime-local"
+                <DateTimePicker
                   value={pairsVisibleAt}
-                  onChange={(e) => setPairsVisibleAt(e.target.value)}
+                  onChange={setPairsVisibleAt}
+                  placeholder="Never"
                 />
                 <p className="text-xs text-muted-foreground">
                   When set, the full giver→receiver list becomes public (admin
@@ -472,20 +565,17 @@ export function AdminPanel({
                 </p>
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={allowSelfDraw}
-                onChange={(e) => setAllowSelfDraw(e.target.checked)}
-              />
-              <span>
-                Allow self-draw
-                <span className="text-muted-foreground">
-                  {" "}
-                  — a person may be matched to themselves
+            <label className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+              <span className="text-sm">
+                <span className="font-medium">Allow self-draw</span>
+                <span className="block text-xs text-muted-foreground">
+                  A person may be matched to themselves.
                 </span>
               </span>
+              <Switch
+                checked={allowSelfDraw}
+                onCheckedChange={setAllowSelfDraw}
+              />
             </label>
             <Button type="submit" disabled={running}>
               {running ? "Drawing…" : "Run draw 🎲"}
@@ -537,21 +627,6 @@ export function AdminPanel({
                   {result.delivery.push.failed} failed.
                 </p>
               )}
-              {result.revealLinks && (
-                <div>
-                  <p className="mb-1 font-medium">Reveal links to share:</p>
-                  <ul className="space-y-1">
-                    {result.revealLinks.map((l) => (
-                      <li key={l.url}>
-                        <span className="font-medium">{l.giver}:</span>{" "}
-                        <a className="break-all underline" href={l.url}>
-                          {l.url}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           )}
         </CardContent>
@@ -570,56 +645,66 @@ export function AdminPanel({
           {pairings.length === 0 ? (
             <p className="text-sm text-muted-foreground">No draws yet.</p>
           ) : (
-            <ul className="space-y-3 text-sm">
+            <ul className="space-y-2 text-sm">
               {pairings.map(({ draw: d, pairs }) => {
                 const pending =
                   d.status !== "completed" && d.scheduledAt != null;
+                // Pairs are inspectable only once they're revealed (date
+                // passed); never-revealed / future draws stay hidden.
                 const visible =
                   d.pairsVisibleAt != null &&
                   new Date(d.pairsVisibleAt).getTime() <= Date.now();
-                return (
-                  <li key={d.id} className="rounded-md border px-3 py-2">
-                    <div className="flex items-center justify-between">
+                const clickable = !pending && visible && pairs.length > 0;
+                const meta = pending ? (
+                  <>scheduled · {new Date(d.scheduledAt!).toLocaleString()}</>
+                ) : (
+                  <>
+                    {[
+                      d.deliverReveal && "reveal",
+                      d.deliverWhatsapp && "WhatsApp",
+                      d.deliverEmail && "email",
+                      d.deliverPush && "push",
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "no delivery"}
+                    {d.budget != null ? ` · budget ${d.budget}` : ""} ·{" "}
+                    {new Date(d.executedAt ?? d.createdAt).toLocaleDateString()}
+                    {!pending &&
+                      (d.pairsVisibleAt == null
+                        ? " · pairs hidden"
+                        : !visible
+                          ? ` · pairs reveal ${new Date(
+                              d.pairsVisibleAt,
+                            ).toLocaleDateString()}`
+                          : "")}
+                  </>
+                );
+                const inner = (
+                  <>
+                    <span>
                       <span className="font-medium">{d.name}</span>
-                      <span className="text-muted-foreground">
-                        {pending ? (
-                          <>
-                            scheduled ·{" "}
-                            {new Date(d.scheduledAt!).toLocaleString()}
-                          </>
-                        ) : (
-                          <>
-                            {d.deliveryMode}
-                            {d.budget != null ? ` · budget ${d.budget}` : ""} ·{" "}
-                            {new Date(
-                              d.executedAt ?? d.createdAt,
-                            ).toLocaleDateString()}
-                          </>
-                        )}
+                      <span className="block text-xs text-muted-foreground">
+                        {meta}
                       </span>
-                    </div>
-                    {!pending && (
-                      <div className="mt-1 text-xs">
-                        {d.pairsVisibleAt == null ? (
-                          <span className="text-muted-foreground">
-                            Pairs hidden (never revealed)
-                          </span>
-                        ) : visible ? (
-                          <ul className="mt-1 space-y-0.5">
-                            {pairs.map((p, i) => (
-                              <li key={i}>
-                                <span className="font-medium">{p.giver}</span>{" "}
-                                <span className="text-muted-foreground">→</span>{" "}
-                                {p.receiver}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Pairs reveal{" "}
-                            {new Date(d.pairsVisibleAt).toLocaleString()}
-                          </span>
-                        )}
+                    </span>
+                    {clickable && (
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                  </>
+                );
+                return (
+                  <li key={d.id}>
+                    {clickable ? (
+                      <button
+                        type="button"
+                        onClick={() => setHistoryOpenId(d.id)}
+                        className="flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left hover:bg-accent"
+                      >
+                        {inner}
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+                        {inner}
                       </div>
                     )}
                   </li>
@@ -630,35 +715,74 @@ export function AdminPanel({
         </CardContent>
       </Card>
 
-      {/* Integrations status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Integrations</CardTitle>
-          <CardDescription>
-            Configured via environment variables. Delivery/notifications only
-            fire for enabled channels.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-1 text-sm">
-            <li>
-              WhatsApp:{" "}
-              <IntegrationBadge on={integrations.whatsapp} /> (WA_API_TOKEN…)
-            </li>
-            <li>
-              Email (Resend): <IntegrationBadge on={integrations.email} />{" "}
-              (RESEND_API_KEY, RESEND_FROM)
-            </li>
-            <li>
-              Push (Web Push): <IntegrationBadge on={integrations.push} />{" "}
-              (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
+      {/* History pairs modal */}
+      <Dialog
+        open={historyOpenId !== null}
+        onOpenChange={(o) => !o && setHistoryOpenId(null)}
+      >
+        <DialogContent>
+          {(() => {
+            const entry = pairings.find((p) => p.draw.id === historyOpenId);
+            if (!entry) return null;
+            const d = entry.draw;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{d.name}</DialogTitle>
+                </DialogHeader>
+                <ul className="space-y-1 text-sm">
+                  {entry.pairs.map((p, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center gap-2 rounded-md border px-3 py-1.5"
+                    >
+                      <span className="font-medium">{p.giver}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span>{p.receiver}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
         </>
       )}
     </div>
+  );
+}
+
+function DeliveryCheckbox({
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-center justify-between gap-3 rounded-md border px-3 py-2",
+        disabled && "opacity-50",
+      )}
+    >
+      <span className="text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <Switch
+        checked={checked && !disabled}
+        onCheckedChange={onChange}
+        disabled={disabled}
+      />
+    </label>
   );
 }
 

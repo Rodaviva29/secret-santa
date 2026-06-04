@@ -53,6 +53,51 @@ export async function getVisiblePairings(): Promise<DrawPairs[]> {
   return pairsForDraws(visible);
 }
 
+export interface MyMatch {
+  drawId: number;
+  drawName: string;
+  date: Date;
+  receiver: string;
+  revealToken: string;
+  deliveryMode: string;
+}
+
+/**
+ * Every match where the given participant is the giver — their personal
+ * draw history. Always visible to the participant themselves (it's their
+ * own secret), independent of the public `pairsVisibleAt` reveal.
+ */
+export async function getMyMatchHistory(
+  participantId: number,
+): Promise<MyMatch[]> {
+  const rows = await db
+    .select({
+      drawId: schema.draw.id,
+      drawName: schema.draw.name,
+      date: schema.draw.createdAt,
+      executedAt: schema.draw.executedAt,
+      receiverId: schema.assignment.receiverId,
+      revealToken: schema.assignment.revealToken,
+      deliveryMode: schema.draw.deliveryMode,
+    })
+    .from(schema.assignment)
+    .innerJoin(schema.draw, eq(schema.assignment.drawId, schema.draw.id))
+    .where(eq(schema.assignment.giverId, participantId))
+    .orderBy(desc(schema.draw.createdAt));
+
+  const participants = await db.select().from(schema.participant);
+  const nameById = new Map(participants.map((p) => [p.id, p.name]));
+
+  return rows.map((r) => ({
+    drawId: r.drawId,
+    drawName: r.drawName,
+    date: r.executedAt ?? r.date,
+    receiver: nameById.get(r.receiverId) ?? `#${r.receiverId}`,
+    revealToken: r.revealToken,
+    deliveryMode: r.deliveryMode,
+  }));
+}
+
 /** All draws' pairs (admin history) with names resolved. */
 export async function getAllPairings(): Promise<DrawPairs[]> {
   const draws = await db

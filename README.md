@@ -6,16 +6,18 @@
 
 Participants sign up, build their **wishlist**, and the organiser runs a draw
 that respects **exclusions**, sets a **budget**, avoids **repeating past
-pairings**, and delivers results via a **reveal page** or **WhatsApp**.
+pairings**, and delivers results via a **reveal page**, **WhatsApp**, **email**
+or **push**. Schedule it for later, reveal the pairings on a date — or keep
+them secret forever.
 
-Rewritten from the ground up: from an Express prototype → **Next.js 15 · React 19 · Better Auth · Postgres/Drizzle**. Dockerised, deploy-ready for **Coolify**. 🐳
+Rewritten from the ground up: from an Express prototype → **Next.js 16 · React 19 · Better Auth · Postgres/Drizzle**. Dockerised, deploy-ready for **Coolify**. 🐳
 
 <img width="1774" height="887" alt="f70372d1-e83c-4261-a849-4ac7585abdcd" src="https://github.com/user-attachments/assets/60d4588b-b22e-41b8-ad23-272ee3500aec" />
 
 <br>
 <br>
 
-![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Better Auth](https://img.shields.io/badge/Better_Auth-1a1a1a?style=for-the-badge&logo=auth0&logoColor=white)
 ![Postgres](https://img.shields.io/badge/Postgres_+_Drizzle-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
@@ -35,9 +37,17 @@ Rewritten from the ground up: from an Express prototype → **Next.js 15 · Reac
 | 📝 | **Wishlists** | Each participant lists what they'd like to receive — their santa sees it all. |
 | 🚫 | **Exclusions** | Forbidden pairs (couples, siblings) never draw each other. |
 | 💰 | **Budget** | Optional per-draw budget, shown on the reveal page. |
-| 🕰️ | **History** | Past draws are used to avoid repeating last year's pairing. |
-| 🎲 | **Robust algorithm** | Backtracking derangement — no self-draw, respects constraints, or fails with a clear error. |
+| 🕰️ | **History** | Past draws are used to avoid repeating last year's pairing — and each member sees their own match history on their dashboard. |
+| 🎲 | **Robust algorithm** | Backtracking derangement — respects constraints, or fails with a clear error. |
+| 🔁 | **Self-draw toggle** | Optional per-draw switch to allow being matched to yourself (off by default). |
+| ⏰ | **Schedule a draw** | Pick a date/time — the draw runs and delivers itself automatically (in-process scheduler). |
+| 👀 | **Reveal pairings** | Choose a date when the full giver→receiver list goes public (admin history + everyone's dashboard), or never. |
 | 📬 | **Pick your delivery** | Per draw: reveal page, WhatsApp + link, or WhatsApp direct. |
+| ✉️ | **Email (optional)** | Resend integration — emails the match to participants with a known account email. |
+| 🔔 | **Push (optional)** | Installable PWA with Web Push notifications when a match is ready. |
+| 🔗 | **Account linking** | Manually-added participants can later be linked to a real user account. |
+| 🌐 | **Site metadata** | Admin "Technical" tab edits OpenGraph title, description, icon and link-preview banner at runtime. |
+| 🏳️ | **Phone with flags** | Country dial-code picker with SVG flags + free-typed codes; stored WhatsApp-style. |
 
 <br>
 
@@ -64,11 +74,12 @@ Rewritten from the ground up: from an Express prototype → **Next.js 15 · Reac
 
 | Layer | Choice |
 |:--|:--|
-| 🖼️ **Framework** | Next.js 15 (App Router) · React 19 |
+| 🖼️ **Framework** | Next.js 16 (App Router) · React 19 |
 | 🔐 **Auth** | Better Auth (+ admin plugin) |
 | 🗄️ **Database** | Postgres via Drizzle ORM (`pg`) |
-| 🎨 **UI** | Tailwind CSS v4 · shadcn/ui |
-| 📲 **Messaging** | Meta WhatsApp Cloud API (Graph API) |
+| 🎨 **UI** | Tailwind CSS v4 · shadcn/ui · react-day-picker · flag-icons |
+| 📲 **Messaging** | Meta WhatsApp Cloud API · Resend (email) · Web Push (PWA) |
+| ⏰ **Scheduling** | In-process poller via `instrumentation.ts` |
 | 🐳 **Deploy** | Docker · docker-compose · Coolify-ready |
 
 ---
@@ -128,6 +139,8 @@ as a **Docker Compose** resource out of the box.
    - `ADMIN_EMAIL` — the account to auto-promote to admin
    - `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
    - `WA_*` — optional, only for WhatsApp delivery
+   - `RESEND_*` — optional, for email delivery
+   - `VAPID_*` / `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — optional, for push notifications
 3. Deploy. 🎉 The bundled Postgres persists in the `pgdata` volume and
    **migrations run automatically** on every container start.
 
@@ -155,6 +168,41 @@ Set `WA_API_TOKEN`, `WA_PHONE_NUMBER_ID`, `WA_TEMPLATE_NAME`,
 
 ---
 
+## ✉️ Email setup (optional)
+
+Powered by [Resend](https://resend.com). When configured, draw results are also
+emailed to participants whose account email is known.
+
+```bash
+RESEND_API_KEY="re_..."
+RESEND_FROM="Secret Santa <santa@your.domain>"   # verified sender
+```
+
+Leave unset to disable email entirely. The admin **Integrations** card shows
+whether it's enabled.
+
+---
+
+## 🔔 Push notifications setup (optional)
+
+The app is an installable **PWA** with Web Push. Generate a VAPID key pair once:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+```bash
+VAPID_PUBLIC_KEY="..."
+NEXT_PUBLIC_VAPID_PUBLIC_KEY="..."   # same value, inlined into the client
+VAPID_PRIVATE_KEY="..."
+VAPID_SUBJECT="mailto:you@example.com"
+```
+
+> ℹ️ `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is baked in at **build time** (it's a
+> Dockerfile build arg). Participants enable notifications from their dashboard.
+
+---
+
 ## 🛠️ Scripts
 
 | Script | What it does |
@@ -171,9 +219,12 @@ Set `WA_API_TOKEN`, `WA_PHONE_NUMBER_ID`, `WA_TEMPLATE_NAME`,
 ## 🗂️ Structure
 
 ```
-app/                  🧭  routes (auth, dashboard, admin, reveal, api)
+app/                  🧭  routes (auth, dashboard, admin, reveal, api, manifest)
 components/           🧩  UI (shadcn + components)
-lib/                  ⚙️  auth · db/schema · draw · whatsapp · session
+lib/                  ⚙️  auth · db/schema · draw · draw-runner · scheduler
+                          whatsapp · email · push · pairings · settings · phone
+instrumentation.ts   ⏰  boots the in-process draw scheduler
+public/              🖼️  PWA service worker + app icon
 drizzle/             🗃️  SQL migrations
 scripts/             📜  database migration runner
 Dockerfile           🐳  standalone production image
