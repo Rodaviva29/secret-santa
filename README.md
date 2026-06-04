@@ -194,7 +194,7 @@ docker-compose.yml   🐳  app + Postgres (Coolify-ready)
 ## 🤝 Contributing
 
 Pull requests welcome! If you'd like to enrich the project, open an issue or a
-PR. 🎄
+PR. Any [Ko-Fis](https://ko-fi.com/rodaviva) given would be greatly welcome to allow me to continue to mantain this project development. If you have any questions or issues, feel free to contact me on Discord (prefereble) or via chat in https://chung-jf.me. My Discord nickname is `Rodaviva`. 🎄
 
 ## 📄 License
 
