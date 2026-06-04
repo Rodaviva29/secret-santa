@@ -10,7 +10,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: og.title,
     description: og.description,
-    icons: og.icon ? { icon: og.icon } : undefined,
+    icons: {
+      icon: og.icon ?? "/android.png",
+      apple: "/ios.png",
+    },
     openGraph: {
       title: og.title,
       description: og.description,
