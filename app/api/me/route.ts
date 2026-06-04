@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import { badRequest } from "@/lib/api";
 import { getOrCreateParticipant } from "@/lib/session";
 
@@ -18,12 +18,13 @@ export async function PUT(req: NextRequest) {
   const parsed = schemaBody.safeParse(await req.json());
   if (!parsed.success) return badRequest("Invalid data.");
 
-  const updated = await db
-    .update(schema.participant)
-    .set({ phone: parsed.data.phone || null })
-    .where(eq(schema.participant.id, participant.id))
-    .returning()
-    .get();
+  const updated = await first(
+    db
+      .update(schema.participant)
+      .set({ phone: parsed.data.phone || null })
+      .where(eq(schema.participant.id, participant.id))
+      .returning(),
+  );
 
   return NextResponse.json(updated);
 }

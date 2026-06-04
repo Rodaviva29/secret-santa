@@ -12,13 +12,12 @@ export default async function AdminPage() {
   if (!user) redirect("/login");
   if (!(await isAdmin())) redirect("/dashboard");
 
-  const participants = await db.select().from(schema.participant).all();
-  const exclusions = await db.select().from(schema.exclusion).all();
+  const participants = await db.select().from(schema.participant);
+  const exclusions = await db.select().from(schema.exclusion);
   const draws = await db
     .select()
     .from(schema.draw)
-    .orderBy(desc(schema.draw.createdAt))
-    .all();
+    .orderBy(desc(schema.draw.createdAt));
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-4 sm:p-8">

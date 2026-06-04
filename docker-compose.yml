@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-santa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-santa}
+      POSTGRES_DB: ${POSTGRES_DB:-santa}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Host access for local dev / migrations. Coolify can drop this.
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-santa} -d ${POSTGRES_DB:-santa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        # Inlined into the client bundle at build time.
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-santa}:${POSTGRES_PASSWORD:-santa}@db:5432/${POSTGRES_DB:-santa}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      WA_API_TOKEN: ${WA_API_TOKEN:-}
+      WA_PHONE_NUMBER_ID: ${WA_PHONE_NUMBER_ID:-}
+      WA_TEMPLATE_NAME: ${WA_TEMPLATE_NAME:-amigo_secreto}
+      WA_TEMPLATE_LANGUAGE: ${WA_TEMPLATE_LANGUAGE:-pt_PT}
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

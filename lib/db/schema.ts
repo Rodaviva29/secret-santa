@@ -1,35 +1,35 @@
-import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  boolean,
+  integer,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 /* ------------------------------------------------------------------ */
 /* Better Auth tables (managed by the admin plugin schema)            */
-/* These mirror what `@better-auth/cli generate` produces for sqlite. */
+/* These mirror what `@better-auth/cli generate` produces for pg.     */
 /* ------------------------------------------------------------------ */
 
-export const user = sqliteTable("user", {
+export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  emailVerified: integer("email_verified", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   // admin plugin fields
   role: text("role"),
-  banned: integer("banned", { mode: "boolean" }),
+  banned: boolean("banned"),
   banReason: text("ban_reason"),
-  banExpires: integer("ban_expires", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  banExpires: timestamp("ban_expires"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const session = sqliteTable("session", {
+export const session = pgTable("session", {
   id: text("id").primaryKey(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
   token: text("token").notNull().unique(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
@@ -38,15 +38,11 @@ export const session = sqliteTable("session", {
     .references(() => user.id, { onDelete: "cascade" }),
   // admin plugin field
   impersonatedBy: text("impersonated_by"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const account = sqliteTable("account", {
+export const account = pgTable("account", {
   id: text("id").primaryKey(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
@@ -56,33 +52,21 @@ export const account = sqliteTable("account", {
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
-  accessTokenExpiresAt: integer("access_token_expires_at", {
-    mode: "timestamp",
-  }),
-  refreshTokenExpiresAt: integer("refresh_token_expires_at", {
-    mode: "timestamp",
-  }),
+  accessTokenExpiresAt: timestamp("access_token_expires_at"),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
   scope: text("scope"),
   password: text("password"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const verification = sqliteTable("verification", {
+export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 /* ------------------------------------------------------------------ */
@@ -94,14 +78,12 @@ export const verification = sqliteTable("verification", {
  * Linked to a Better Auth user once they sign up; `phone` kept for
  * WhatsApp delivery.
  */
-export const participant = sqliteTable("participant", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const participant = pgTable("participant", {
+  id: serial("id").primaryKey(),
   userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   phone: text("phone"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type DeliveryMode = "reveal" | "wa_link" | "wa_direct";
@@ -112,17 +94,18 @@ export type DrawStatus = "draft" | "completed";
  * delivered. Multiple draws over time form the history used to avoid
  * repeating last year's pairing.
  */
-export const draw = sqliteTable("draw", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const draw = pgTable("draw", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   budget: integer("budget"),
-  deliveryMode: text("delivery_mode").$type<DeliveryMode>().notNull().default("reveal"),
+  deliveryMode: text("delivery_mode")
+    .$type<DeliveryMode>()
+    .notNull()
+    .default("reveal"),
   // for `reveal` mode: max times a token may be viewed before it locks
   previewLimit: integer("preview_limit").notNull().default(3),
   status: text("status").$type<DrawStatus>().notNull().default("draft"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 /**
@@ -130,8 +113,8 @@ export const draw = sqliteTable("draw", {
  * secret used by the public reveal page; `revealCount` enforces the
  * per-draw preview limit.
  */
-export const assignment = sqliteTable("assignment", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const assignment = pgTable("assignment", {
+  id: serial("id").primaryKey(),
   drawId: integer("draw_id")
     .notNull()
     .references(() => draw.id, { onDelete: "cascade" }),
@@ -143,39 +126,33 @@ export const assignment = sqliteTable("assignment", {
     .references(() => participant.id, { onDelete: "cascade" }),
   revealToken: text("reveal_token").notNull().unique(),
   revealCount: integer("reveal_count").notNull().default(0),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 /**
  * A symmetric forbidden pair: giver `aId` will never draw `bId` and
  * vice-versa (e.g. couples, siblings).
  */
-export const exclusion = sqliteTable("exclusion", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const exclusion = pgTable("exclusion", {
+  id: serial("id").primaryKey(),
   aId: integer("a_id")
     .notNull()
     .references(() => participant.id, { onDelete: "cascade" }),
   bId: integer("b_id")
     .notNull()
     .references(() => participant.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 /** A wishlist line owned by a participant, visible to their santa. */
-export const wishlistItem = sqliteTable("wishlist_item", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const wishlistItem = pgTable("wishlist_item", {
+  id: serial("id").primaryKey(),
   participantId: integer("participant_id")
     .notNull()
     .references(() => participant.id, { onDelete: "cascade" }),
   text: text("text").notNull(),
   url: text("url"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export type User = typeof user.$inferSelect;

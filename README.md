@@ -2,21 +2,21 @@
 
 # 🎁 WhatsApp Secret Santa
 
-### *Sorteio de amigo secreto, agora com superpoderes.* ✨
+### *Secret Santa, now with superpowers.* ✨
 
-Participantes registam-se, montam a sua **wishlist**, e o organizador corre um
-sorteio que respeita **exclusões**, define **orçamento**, evita **repetir pares
-de anos anteriores**, e entrega o resultado por **página de revelação** ou
-**WhatsApp**.
+Participants sign up, build their **wishlist**, and the organiser runs a draw
+that respects **exclusions**, sets a **budget**, avoids **repeating past
+pairings**, and delivers results via a **reveal page** or **WhatsApp**.
 
-Reescrito de raiz: do protótipo Express → **Next.js 15 · React 19 · Better Auth · SQLite/Drizzle**.
+Rewritten from the ground up: from an Express prototype → **Next.js 15 · React 19 · Better Auth · Postgres/Drizzle**. Dockerised, deploy-ready for **Coolify**. 🐳
 
 <br>
 
 ![Next.js](https://img.shields.io/badge/Next.js_15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Better Auth](https://img.shields.io/badge/Better_Auth-1a1a1a?style=for-the-badge&logo=auth0&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite_+_Drizzle-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+![Postgres](https://img.shields.io/badge/Postgres_+_Drizzle-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 ![WhatsApp](https://img.shields.io/badge/WhatsApp_API-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
 
@@ -26,32 +26,32 @@ Reescrito de raiz: do protótipo Express → **Next.js 15 · React 19 · Better 
 
 ## ✨ Features
 
-| | Feature | O que faz |
+| | Feature | What it does |
 |:--:|:--|:--|
-| 🔐 | **Contas** | Login email/password (Better Auth). 1.º utilizador (ou `ADMIN_EMAIL`) vira admin automaticamente. |
-| 📝 | **Wishlists** | Cada participante lista o que gostava de receber — o seu santa vê tudo. |
-| 🚫 | **Exclusões** | Pares proibidos (casais, irmãos) nunca se tiram um ao outro. |
-| 💰 | **Orçamento** | Limite opcional por sorteio, mostrado na página de revelação. |
-| 🕰️ | **Histórico** | Sorteios passados evitam repetir o par do ano anterior. |
-| 🎲 | **Algoritmo robusto** | Derangement com backtracking — sem auto-sorteio, respeita restrições, ou falha com erro claro. |
-| 📬 | **Entrega à escolha** | Por sorteio: página de revelação, WhatsApp+link, ou WhatsApp direto. |
+| 🔐 | **Accounts** | Email/password login (Better Auth). The first user (or `ADMIN_EMAIL`) becomes admin automatically. |
+| 📝 | **Wishlists** | Each participant lists what they'd like to receive — their santa sees it all. |
+| 🚫 | **Exclusions** | Forbidden pairs (couples, siblings) never draw each other. |
+| 💰 | **Budget** | Optional per-draw budget, shown on the reveal page. |
+| 🕰️ | **History** | Past draws are used to avoid repeating last year's pairing. |
+| 🎲 | **Robust algorithm** | Backtracking derangement — no self-draw, respects constraints, or fails with a clear error. |
+| 📬 | **Pick your delivery** | Per draw: reveal page, WhatsApp + link, or WhatsApp direct. |
 
 <br>
 
-### 📬 Modos de entrega
+### 📬 Delivery modes
 
 <table>
 <tr>
 <td align="center">🔗<br><b>Reveal</b></td>
-<td>Links privados de revelação, com <b>limite de visualizações</b> por link.</td>
+<td>Private reveal links, with a per-link <b>view limit</b>.</td>
 </tr>
 <tr>
 <td align="center">💬<br><b>WA + Link</b></td>
-<td>Mensagem WhatsApp com o link de revelação.</td>
+<td>WhatsApp message containing the reveal link.</td>
 </tr>
 <tr>
-<td align="center">🎅<br><b>WA Direto</b></td>
-<td>Mensagem WhatsApp com o nome do par no template.</td>
+<td align="center">🎅<br><b>WA Direct</b></td>
+<td>WhatsApp message with the match's name in the template.</td>
 </tr>
 </table>
 
@@ -59,106 +59,146 @@ Reescrito de raiz: do protótipo Express → **Next.js 15 · React 19 · Better 
 
 ## 🧱 Stack
 
-| Camada | Escolha |
+| Layer | Choice |
 |:--|:--|
 | 🖼️ **Framework** | Next.js 15 (App Router) · React 19 |
 | 🔐 **Auth** | Better Auth (+ admin plugin) |
-| 🗄️ **Base de dados** | SQLite via Drizzle ORM (`better-sqlite3`) |
+| 🗄️ **Database** | Postgres via Drizzle ORM (`pg`) |
 | 🎨 **UI** | Tailwind CSS v4 · shadcn/ui |
-| 📲 **Mensagens** | Meta WhatsApp Cloud API (Graph API) |
+| 📲 **Messaging** | Meta WhatsApp Cloud API (Graph API) |
+| 🐳 **Deploy** | Docker · docker-compose · Coolify-ready |
 
 ---
 
-## 🚀 Começar
+## 🚀 Getting started
+
+### 🐳 Option A — Docker (recommended)
+
+Brings up the app **and** Postgres together. Migrations run automatically on
+start.
 
 ```bash
-# 1️⃣  Instalar
+# 1️⃣  Configure
+cp .env.example .env
+#   • BETTER_AUTH_SECRET  →  openssl rand -base64 32
+#   • ADMIN_EMAIL         →  the email you'll sign up with (becomes admin)
+#   • POSTGRES_*          →  credentials for the bundled database
+#   • WA_*                →  (optional) only for WhatsApp delivery
+
+# 2️⃣  Build + run
+docker compose up -d --build   # 👉  http://localhost:3000
+```
+
+### 💻 Option B — Local dev
+
+```bash
+# 1️⃣  Install
 npm install
 
-# 2️⃣  Configurar
+# 2️⃣  Configure (set DATABASE_URL to a running Postgres)
 cp .env.example .env
-#   • BETTER_AUTH_SECRET  →  node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-#   • ADMIN_EMAIL         →  o email com que vais registar (vira admin)
-#   • WA_*                →  (opcional) só para entrega via WhatsApp
 
-# 3️⃣  Criar a base de dados
+# 3️⃣  Apply migrations
 npm run db:migrate
 
-# 4️⃣  (opcional) importar participantes de um data/users.json antigo
-npm run migrate:legacy
-
-# 5️⃣  Arrancar
+# 4️⃣  Run
 npm run dev      # 👉  http://localhost:3000
 ```
 
-> 💡 Regista-te com o `ADMIN_EMAIL` para ganhares o papel de admin, depois abre
-> **/admin** para adicionar participantes, definir exclusões, escolher a entrega
-> e correr o sorteio.
+> 💡 Need a quick Postgres for local dev?
+> `docker compose up -d db` starts just the database.
+
+> 💡 Sign up with `ADMIN_EMAIL` to get the admin role, then open **/admin** to
+> add participants, set exclusions, choose delivery, and run the draw.
 
 ---
 
-## 📲 Configurar WhatsApp
+## ☁️ Deploy on Coolify
 
-Para `wa_link` / `wa_direct` precisas de uma conta Meta WhatsApp Business e de um
-**template** aprovado com dois parâmetros no corpo:
+This repo ships a `Dockerfile` + `docker-compose.yml`, so Coolify can deploy it
+as a **Docker Compose** resource out of the box.
 
-| Param | Conteúdo |
+1. **New Resource → Docker Compose**, point it at this repo.
+2. Set the environment variables (Coolify reads them into the compose file):
+   - `BETTER_AUTH_SECRET` — a long random string
+   - `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` — your public URL (e.g. `https://santa.example.com`)
+   - `ADMIN_EMAIL` — the account to auto-promote to admin
+   - `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
+   - `WA_*` — optional, only for WhatsApp delivery
+3. Deploy. 🎉 The bundled Postgres persists in the `pgdata` volume and
+   **migrations run automatically** on every container start.
+
+> ℹ️ `NEXT_PUBLIC_APP_URL` is baked into the client at **build time** — set it
+> before the image is built so reveal links use the right domain.
+
+> ℹ️ Prefer Coolify's **managed Postgres** instead of the bundled one? Remove
+> the `db` service from the compose file and set `DATABASE_URL` to the managed
+> instance's connection string.
+
+---
+
+## 📲 WhatsApp setup
+
+For `wa_link` / `wa_direct` you need a Meta WhatsApp Business account and an
+approved **template** with two body parameters:
+
+| Param | Content |
 |:--:|:--|
-| `{{1}}` | Nome de quem oferece |
-| `{{2}}` | Nome do par (`wa_direct`) **ou** URL de revelação (`wa_link`) |
+| `{{1}}` | The giver's name |
+| `{{2}}` | The match's name (`wa_direct`) **or** the reveal URL (`wa_link`) |
 
-Define `WA_API_TOKEN`, `WA_PHONE_NUMBER_ID`, `WA_TEMPLATE_NAME`,
-`WA_TEMPLATE_LANGUAGE` no `.env`. A entrega por página de revelação não precisa
-de nada disto. ✅
+Set `WA_API_TOKEN`, `WA_PHONE_NUMBER_ID`, `WA_TEMPLATE_NAME`,
+`WA_TEMPLATE_LANGUAGE` in `.env`. Reveal-page delivery needs none of this. ✅
 
 ---
 
 ## 🛠️ Scripts
 
-| Script | Faz |
+| Script | What it does |
 |:--|:--|
-| `npm run dev` | 🔥 Servidor de desenvolvimento |
-| `npm run build` | 📦 Build de produção |
-| `npm test` | 🧪 Testes do algoritmo de sorteio |
-| `npm run db:generate` | 🧬 Gerar migração Drizzle |
-| `npm run db:migrate` | ⬆️ Aplicar migrações |
-| `npm run db:studio` | 🔍 Abrir Drizzle Studio |
-| `npm run migrate:legacy` | 📥 Importar `data/users.json` antigo |
+| `npm run dev` | 🔥 Development server |
+| `npm run build` | 📦 Production build |
+| `npm test` | 🧪 Draw-algorithm unit tests |
+| `npm run db:generate` | 🧬 Generate a Drizzle migration |
+| `npm run db:migrate` | ⬆️ Apply migrations |
+| `npm run db:studio` | 🔍 Open Drizzle Studio |
 
 ---
 
-## 🗂️ Estrutura
+## 🗂️ Structure
 
 ```
-app/          🧭  rotas (auth, dashboard, admin, reveal, api)
-components/   🧩  UI (shadcn + componentes)
-lib/          ⚙️  auth · db/schema · draw · whatsapp · session
-drizzle/      🗃️  migrações SQL
-scripts/      📜  migração de dados antigos
+app/                  🧭  routes (auth, dashboard, admin, reveal, api)
+components/           🧩  UI (shadcn + components)
+lib/                  ⚙️  auth · db/schema · draw · whatsapp · session
+drizzle/             🗃️  SQL migrations
+scripts/             📜  database migration runner
+Dockerfile           🐳  standalone production image
+docker-compose.yml   🐳  app + Postgres (Coolify-ready)
 ```
 
 ---
 
-## 📜 Versões
+## 📜 Versions
 
-| Branch | O que é |
+| Branch | What it is |
 |:--:|:--|
-| 🟢 **v2** | Esta reescrita (Next.js · Better Auth · Drizzle) — branch atual |
-| 🟡 **v1** | Protótipo Express original (HTML estático + JSON) |
+| 🟢 **v2** | This rewrite (Next.js · Better Auth · Drizzle) — current branch |
+| 🟡 **v1** | The original Express prototype (static HTML + JSON) |
 
 ---
 
-## 🤝 Contribuir
+## 🤝 Contributing
 
-Pull requests são bem-vindos! Se quiseres enriquecer o projeto, abre uma issue
-ou um PR. 🎄
+Pull requests welcome! If you'd like to enrich the project, open an issue or a
+PR. 🎄
 
-## 📄 Licença
+## 📄 License
 
-MIT — ver [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
 <div align="center">
 
-### 🎄 Feliz Natal! 🎁
+### 🎄 Happy Xmas! 🎁
 
 </div>

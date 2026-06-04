@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { Gift, Lock } from "lucide-react";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import {
   Card,
   CardContent,
@@ -24,11 +24,12 @@ export default async function RevealPage({
 }) {
   const { token } = await params;
 
-  const assignment = await db
-    .select()
-    .from(schema.assignment)
-    .where(eq(schema.assignment.revealToken, token))
-    .get();
+  const assignment = await first(
+    db
+      .select()
+      .from(schema.assignment)
+      .where(eq(schema.assignment.revealToken, token)),
+  );
 
   if (!assignment) {
     return (
@@ -41,11 +42,9 @@ export default async function RevealPage({
     );
   }
 
-  const draw = await db
-    .select()
-    .from(schema.draw)
-    .where(eq(schema.draw.id, assignment.drawId))
-    .get();
+  const draw = await first(
+    db.select().from(schema.draw).where(eq(schema.draw.id, assignment.drawId)),
+  );
 
   // Enforce the per-draw preview limit (reveal mode only).
   const limit = draw?.previewLimit ?? Infinity;
@@ -73,17 +72,17 @@ export default async function RevealPage({
     .set({ revealCount: sql`${schema.assignment.revealCount} + 1` })
     .where(eq(schema.assignment.id, assignment.id));
 
-  const receiver = await db
-    .select()
-    .from(schema.participant)
-    .where(eq(schema.participant.id, assignment.receiverId))
-    .get();
+  const receiver = await first(
+    db
+      .select()
+      .from(schema.participant)
+      .where(eq(schema.participant.id, assignment.receiverId)),
+  );
 
   const wishlist = await db
     .select()
     .from(schema.wishlistItem)
-    .where(eq(schema.wishlistItem.participantId, assignment.receiverId))
-    .all();
+    .where(eq(schema.wishlistItem.participantId, assignment.receiverId));
 
   const viewsLeft =
     draw?.deliveryMode === "reveal"

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { Gift } from "lucide-react";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import { getCurrentUser, getOrCreateParticipant, isAdmin } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,21 +28,23 @@ export default async function DashboardPage() {
         .select()
         .from(schema.wishlistItem)
         .where(eq(schema.wishlistItem.participantId, participant.id))
-        .all()
     : [];
 
   // Most recent assignment where this participant is the giver.
   const latest = participant
-    ? await db
-        .select()
-        .from(schema.assignment)
-        .where(eq(schema.assignment.giverId, participant.id))
-        .orderBy(desc(schema.assignment.createdAt))
-        .get()
+    ? await first(
+        db
+          .select()
+          .from(schema.assignment)
+          .where(eq(schema.assignment.giverId, participant.id))
+          .orderBy(desc(schema.assignment.createdAt)),
+      )
     : undefined;
 
   const myDraw = latest
-    ? await db.select().from(schema.draw).where(eq(schema.draw.id, latest.drawId)).get()
+    ? await first(
+        db.select().from(schema.draw).where(eq(schema.draw.id, latest.drawId)),
+      )
     : undefined;
 
   return (

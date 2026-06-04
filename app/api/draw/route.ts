@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { desc } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import { badRequest, requireAdmin } from "@/lib/api";
 import { DrawError, runDraw } from "@/lib/draw";
 import { isWhatsAppConfigured, sendBatch, type SendInput } from "@/lib/whatsapp";
@@ -14,8 +14,7 @@ export async function GET() {
   const draws = await db
     .select()
     .from(schema.draw)
-    .orderBy(desc(schema.draw.createdAt))
-    .all();
+    .orderBy(desc(schema.draw.createdAt));
   return NextResponse.json(draws);
 }
 
@@ -48,13 +47,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const participants = await db.select().from(schema.participant).all();
+  const participants = await db.select().from(schema.participant);
   if (participants.length < 2) {
     return badRequest("Need at least 2 participants to run a draw.");
   }
 
-  const exclusions = await db.select().from(schema.exclusion).all();
-  const history = await db.select().from(schema.assignment).all();
+  const exclusions = await db.select().from(schema.exclusion);
+  const history = await db.select().from(schema.assignment);
 
   // Compute the assignment.
   let pairs: Map<number, number>;
@@ -71,17 +70,18 @@ export async function POST(req: NextRequest) {
   }
 
   // Persist draw + assignments.
-  const draw = await db
-    .insert(schema.draw)
-    .values({
-      name: cfg.name,
-      budget: cfg.budget ?? null,
-      deliveryMode: cfg.deliveryMode,
-      previewLimit: cfg.previewLimit,
-      status: "completed",
-    })
-    .returning()
-    .get();
+  const draw = (await first(
+    db
+      .insert(schema.draw)
+      .values({
+        name: cfg.name,
+        budget: cfg.budget ?? null,
+        deliveryMode: cfg.deliveryMode,
+        previewLimit: cfg.previewLimit,
+        status: "completed",
+      })
+      .returning(),
+  ))!;
 
   const byId = new Map(participants.map((p) => [p.id, p]));
   const rows = [...pairs.entries()].map(([giverId, receiverId]) => ({

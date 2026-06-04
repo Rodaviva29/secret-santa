@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import { badRequest, requireAdmin } from "@/lib/api";
 
 const updateSchema = z.object({
@@ -22,17 +22,18 @@ export async function PUT(
   const parsed = updateSchema.safeParse(await req.json());
   if (!parsed.success) return badRequest("Invalid data.");
 
-  const updated = await db
-    .update(schema.participant)
-    .set({
-      ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-      ...(parsed.data.phone !== undefined
-        ? { phone: parsed.data.phone || null }
-        : {}),
-    })
-    .where(eq(schema.participant.id, id))
-    .returning()
-    .get();
+  const updated = await first(
+    db
+      .update(schema.participant)
+      .set({
+        ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+        ...(parsed.data.phone !== undefined
+          ? { phone: parsed.data.phone || null }
+          : {}),
+      })
+      .where(eq(schema.participant.id, id))
+      .returning(),
+  );
 
   if (!updated) return badRequest("Participant not found.");
   return NextResponse.json(updated);

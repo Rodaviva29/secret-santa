@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import { badRequest, requireAdmin } from "@/lib/api";
 
 export async function GET() {
   const forbidden = await requireAdmin();
   if (forbidden) return forbidden;
 
-  const rows = await db.select().from(schema.exclusion).all();
+  const rows = await db.select().from(schema.exclusion);
   return NextResponse.json(rows);
 }
 
@@ -26,11 +26,12 @@ export async function POST(req: NextRequest) {
     return badRequest("An exclusion needs two different participants.");
   }
 
-  const row = await db
-    .insert(schema.exclusion)
-    .values({ aId: parsed.data.aId, bId: parsed.data.bId })
-    .returning()
-    .get();
+  const row = await first(
+    db
+      .insert(schema.exclusion)
+      .values({ aId: parsed.data.aId, bId: parsed.data.bId })
+      .returning(),
+  );
 
   return NextResponse.json(row, { status: 201 });
 }

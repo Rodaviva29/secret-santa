@@ -8,7 +8,7 @@ import { db, schema } from "@/lib/db";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
-    provider: "sqlite",
+    provider: "pg",
     schema: {
       user: schema.user,
       session: schema.session,
@@ -30,7 +30,7 @@ export const auth = betterAuth({
         async before(user) {
           const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
           const isFirstUser =
-            (await db.select({ c: count() }).from(schema.user).get())?.c === 0;
+            (await db.select({ c: count() }).from(schema.user))[0]?.c === 0;
           const isAdmin =
             isFirstUser ||
             (!!adminEmail && user.email.toLowerCase() === adminEmail);

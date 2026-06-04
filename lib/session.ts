@@ -2,7 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
+import { db, first, schema } from "@/lib/db";
 import type { Participant } from "@/lib/db/schema";
 
 /** Current Better Auth session, or null. */
@@ -29,17 +29,19 @@ export async function getOrCreateParticipant(): Promise<Participant | null> {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const existing = await db
-    .select()
-    .from(schema.participant)
-    .where(eq(schema.participant.userId, user.id))
-    .get();
+  const existing = await first(
+    db
+      .select()
+      .from(schema.participant)
+      .where(eq(schema.participant.userId, user.id)),
+  );
   if (existing) return existing;
 
-  const inserted = await db
-    .insert(schema.participant)
-    .values({ userId: user.id, name: user.name, phone: null })
-    .returning()
-    .get();
-  return inserted;
+  const inserted = await first(
+    db
+      .insert(schema.participant)
+      .values({ userId: user.id, name: user.name, phone: null })
+      .returning(),
+  );
+  return inserted ?? null;
 }
