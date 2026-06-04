@@ -4,6 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { Gift } from "lucide-react";
 import { db, first, schema } from "@/lib/db";
 import { getCurrentUser, getOrCreateParticipant, isAdmin } from "@/lib/session";
+import { getVisiblePairings } from "@/lib/pairings";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,6 +16,7 @@ import {
 import { SignOutButton } from "@/components/sign-out-button";
 import { WishlistEditor } from "@/components/wishlist-editor";
 import { PhoneEditor } from "@/components/phone-editor";
+import { PushToggle } from "@/components/push-toggle";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -47,6 +49,28 @@ export default async function DashboardPage() {
       )
     : undefined;
 
+  // The person this user is gifting to, plus their wishlist. The dashboard
+  // is authenticated, so we can show the match directly here regardless of
+  // the draw's delivery mode (no token / preview limit applies).
+  const receiver = latest
+    ? await first(
+        db
+          .select()
+          .from(schema.participant)
+          .where(eq(schema.participant.id, latest.receiverId)),
+      )
+    : undefined;
+
+  const receiverWishlist = receiver
+    ? await db
+        .select()
+        .from(schema.wishlistItem)
+        .where(eq(schema.wishlistItem.participantId, receiver.id))
+    : [];
+
+  // Draws whose full pairing list has been made public.
+  const visiblePairings = await getVisiblePairings();
+
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-4 sm:p-8">
       <header className="flex items-center justify-between">
@@ -64,23 +88,85 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      {latest && myDraw && (
+      {latest && myDraw && receiver && (
         <Card>
           <CardHeader>
             <CardTitle>Your secret santa is ready 🎉</CardTitle>
             <CardDescription>
-              {myDraw.deliveryMode === "wa_direct"
-                ? "Check WhatsApp for your match."
-                : "Open your private reveal link to see who you got."}
+              {myDraw.name} — you are giving a gift to…
             </CardDescription>
           </CardHeader>
-          {myDraw.deliveryMode !== "wa_direct" && (
-            <CardContent>
-              <Button asChild>
-                <Link href={`/reveal/${latest.revealToken}`}>Reveal my match</Link>
-              </Button>
-            </CardContent>
-          )}
+          <CardContent className="space-y-4">
+            <p className="text-2xl font-bold">{receiver.name}</p>
+
+            {myDraw.budget != null && (
+              <p className="text-sm text-muted-foreground">
+                Budget: <span className="font-medium">{myDraw.budget}</span>
+              </p>
+            )}
+
+            <div>
+              <h2 className="mb-2 text-sm font-medium">Their wishlist</h2>
+              {receiverWishlist.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No wishlist yet.</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {receiverWishlist.map((w) => (
+                    <li key={w.id} className="rounded-md border px-3 py-2">
+                      {w.url ? (
+                        <a
+                          href={w.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          {w.text}
+                        </a>
+                      ) : (
+                        w.text
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/reveal/${latest.revealToken}`}>
+                Open shareable reveal link
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {visiblePairings.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pairings revealed 📜</CardTitle>
+            <CardDescription>
+              These draws have had their full results made public.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {visiblePairings.map(({ draw, pairs }) => (
+              <div key={draw.id}>
+                <h3 className="mb-1 text-sm font-medium">{draw.name}</h3>
+                <ul className="space-y-1 text-sm">
+                  {pairs.map((p, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center gap-2 rounded-md border px-3 py-1.5"
+                    >
+                      <span className="font-medium">{p.giver}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span>{p.receiver}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </CardContent>
         </Card>
       )}
 
@@ -113,6 +199,18 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>
+            Get a push notification on this device when your match is ready.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PushToggle />
+        </CardContent>
+      </Card>
     </main>
   );
 }

@@ -60,6 +60,32 @@ describe("runDraw", () => {
     expect(() => runDraw([1, 2], [[1, 2]])).toThrow(DrawError);
   });
 
+  it("still produces a full permutation when self-draw is allowed", () => {
+    const ids = [1, 2, 3, 4, 5];
+    for (let i = 0; i < RUNS; i++) {
+      const { pairs } = runDraw(ids, [], [], { allowSelfDraw: true });
+      expect([...pairs.keys()].sort()).toEqual(ids);
+      expect([...pairs.values()].sort()).toEqual(ids);
+    }
+  });
+
+  it("allows self-assignment in the only-possible case when self-draw is on", () => {
+    // 2 people who exclude each other: a derangement is impossible, but with
+    // self-draw each gives to themselves.
+    const { pairs } = runDraw([1, 2], [[1, 2]], [], { allowSelfDraw: true });
+    expect(pairs.get(1)).toBe(1);
+    expect(pairs.get(2)).toBe(2);
+  });
+
+  it("still honours exclusions when self-draw is allowed", () => {
+    const ids = [1, 2, 3, 4];
+    for (let i = 0; i < RUNS; i++) {
+      const { pairs } = runDraw(ids, [[1, 2]], [], { allowSelfDraw: true });
+      expect(pairs.get(1)).not.toBe(2);
+      expect(pairs.get(2)).not.toBe(1);
+    }
+  });
+
   it("handles a tightly-constrained-but-solvable case", () => {
     // n=3 with one excluded pair is unsolvable (both derangements use a
     // forbidden edge), so use n=4 where a valid assignment still exists.

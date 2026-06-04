@@ -40,16 +40,19 @@ interface SolveOptions {
    * Exclusions are symmetric, so callers should add both directions.
    */
   forbidden: Set<string>;
+  /** when true, a giver may be matched to themselves (self-draw). */
+  allowSelfDraw?: boolean;
   /** how many random restarts before giving up */
   attempts?: number;
 }
 
 /**
  * Backtracking assignment. Each giver gets a distinct receiver that is
- * not themselves and not forbidden. Returns null if this restart fails.
+ * not forbidden, and (unless self-draw is allowed) not themselves.
+ * Returns null if this restart fails.
  */
 function tryAssign(opts: SolveOptions): Map<number, number> | null {
-  const { ids, forbidden } = opts;
+  const { ids, forbidden, allowSelfDraw = false } = opts;
   const givers = shuffle(ids);
   const used = new Set<number>();
   const pairs = new Map<number, number>();
@@ -58,7 +61,10 @@ function tryAssign(opts: SolveOptions): Map<number, number> | null {
     if (i === givers.length) return true;
     const giver = givers[i];
     const candidates = shuffle(ids).filter(
-      (r) => r !== giver && !used.has(r) && !forbidden.has(pairKey(giver, r)),
+      (r) =>
+        (allowSelfDraw || r !== giver) &&
+        !used.has(r) &&
+        !forbidden.has(pairKey(giver, r)),
     );
     for (const receiver of candidates) {
       pairs.set(giver, receiver);
@@ -73,6 +79,12 @@ function tryAssign(opts: SolveOptions): Map<number, number> | null {
   return backtrack(0) ? pairs : null;
 }
 
+/** Options controlling how a draw is solved. */
+export interface RunDrawOptions {
+  /** when true, a participant may draw themselves. Default false. */
+  allowSelfDraw?: boolean;
+}
+
 /**
  * Run a draw.
  *
@@ -80,12 +92,16 @@ function tryAssign(opts: SolveOptions): Map<number, number> | null {
  * @param exclusions symmetric forbidden pairs `[a, b]`
  * @param history    previous `giver->receiver` pairs to avoid as a soft
  *                   constraint (relaxed automatically if unsatisfiable)
+ * @param options    extra solve options (e.g. allowSelfDraw)
  */
 export function runDraw(
   ids: number[],
   exclusions: Array<[number, number]> = [],
   history: Array<[number, number]> = [],
+  options: RunDrawOptions = {},
 ): DrawResult {
+  const allowSelfDraw = options.allowSelfDraw ?? false;
+
   if (ids.length < 2) {
     throw new DrawError("Need at least 2 participants to run a draw.");
   }
@@ -97,8 +113,11 @@ export function runDraw(
   }
 
   // Quick feasibility check: every giver must have >=1 allowed receiver.
+  // Self is only a candidate when self-draw is enabled.
   for (const g of ids) {
-    const ok = ids.some((r) => r !== g && !hard.has(pairKey(g, r)));
+    const ok = ids.some(
+      (r) => (allowSelfDraw || r !== g) && !hard.has(pairKey(g, r)),
+    );
     if (!ok) {
       throw new DrawError(
         "No valid assignment exists — exclusions are too restrictive.",
@@ -113,14 +132,14 @@ export function runDraw(
   if (histSet.size > 0) {
     const softForbidden = new Set([...hard, ...histSet]);
     for (let i = 0; i < ATTEMPTS; i++) {
-      const pairs = tryAssign({ ids, forbidden: softForbidden });
+      const pairs = tryAssign({ ids, forbidden: softForbidden, allowSelfDraw });
       if (pairs) return { pairs };
     }
   }
 
   // Phase 2: relax history, keep hard exclusions.
   for (let i = 0; i < ATTEMPTS; i++) {
-    const pairs = tryAssign({ ids, forbidden: hard });
+    const pairs = tryAssign({ ids, forbidden: hard, allowSelfDraw });
     if (pairs) return { pairs };
   }
 

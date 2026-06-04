@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { desc } from "drizzle-orm";
 import { ShieldCheck } from "lucide-react";
 import { db, schema } from "@/lib/db";
 import { getCurrentUser, isAdmin } from "@/lib/session";
+import { getOgSettings } from "@/lib/settings";
+import { getAllPairings } from "@/lib/pairings";
+import { isEmailConfigured } from "@/lib/email";
+import { isPushConfigured } from "@/lib/push";
+import { isWhatsAppConfigured } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
 import { AdminPanel } from "@/components/admin-panel";
 
@@ -14,10 +18,20 @@ export default async function AdminPage() {
 
   const participants = await db.select().from(schema.participant);
   const exclusions = await db.select().from(schema.exclusion);
-  const draws = await db
-    .select()
-    .from(schema.draw)
-    .orderBy(desc(schema.draw.createdAt));
+  const users = await db
+    .select({
+      id: schema.user.id,
+      name: schema.user.name,
+      email: schema.user.email,
+    })
+    .from(schema.user);
+  const og = await getOgSettings();
+  const pairings = await getAllPairings();
+  const integrations = {
+    whatsapp: isWhatsAppConfigured(),
+    email: isEmailConfigured(),
+    push: isPushConfigured(),
+  };
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-4 sm:p-8">
@@ -34,7 +48,10 @@ export default async function AdminPage() {
       <AdminPanel
         participants={participants}
         exclusions={exclusions}
-        draws={draws}
+        pairings={pairings}
+        users={users}
+        og={og}
+        integrations={integrations}
       />
     </main>
   );

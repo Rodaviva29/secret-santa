@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Link2 as LinkIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,23 +24,79 @@ import type {
   Exclusion,
   Participant,
 } from "@/lib/db/schema";
+import type { OgSettings } from "@/lib/settings";
+import type { DrawPairs } from "@/lib/pairings";
+import { OgSettingsForm } from "@/components/og-settings";
+import { cn } from "@/lib/utils";
+
+interface UserOption {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface Integrations {
+  whatsapp: boolean;
+  email: boolean;
+  push: boolean;
+}
 
 interface Props {
   participants: Participant[];
   exclusions: Exclusion[];
-  draws: Draw[];
+  pairings: DrawPairs[];
+  users: UserOption[];
+  og: OgSettings;
+  integrations: Integrations;
 }
+
+type DrawDelivery = {
+  whatsapp: { sent: number; failed: number; errors: string[] } | null;
+  email: { sent: number; failed: number } | null;
+  push: { sent: number; failed: number } | null;
+};
 
 type DrawResponse = {
   draw: Draw;
-  assignments: number;
-  delivery: { sent: number; failed: number; errors: string[] } | null;
+  assignments?: number;
+  delivery?: DrawDelivery;
   revealLinks?: { giver: string; url: string }[];
+  scheduled?: boolean;
+  scheduledAt?: string;
 };
 
-export function AdminPanel({ participants, exclusions, draws }: Props) {
+export function AdminPanel({
+  participants,
+  exclusions,
+  pairings,
+  users,
+  og,
+  integrations,
+}: Props) {
   const router = useRouter();
+  const [tab, setTab] = useState<"santa" | "technical">("santa");
   const nameById = new Map(participants.map((p) => [p.id, p.name]));
+  const userById = new Map(users.map((u) => [u.id, u]));
+
+  // Accounts not yet tied to any participant — candidates for linking.
+  const linkedUserIds = new Set(
+    participants.map((p) => p.userId).filter((id): id is string => !!id),
+  );
+  const linkableUsers = users.filter((u) => !linkedUserIds.has(u.id));
+
+  async function linkParticipant(id: number, userId: string | null) {
+    const res = await fetch(`/api/participants/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    if (res.ok) {
+      router.refresh();
+    } else {
+      const json = await res.json().catch(() => ({}));
+      alert(json.error ?? "Could not update the link.");
+    }
+  }
 
   /* -------- add participant -------- */
   const [pName, setPName] = useState("");
@@ -93,6 +149,10 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
   const [budget, setBudget] = useState("");
   const [mode, setMode] = useState<"reveal" | "wa_link" | "wa_direct">("reveal");
   const [previewLimit, setPreviewLimit] = useState("3");
+  const [allowSelfDraw, setAllowSelfDraw] = useState(false);
+  // datetime-local strings ("" = unset)
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [pairsVisibleAt, setPairsVisibleAt] = useState("");
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<DrawResponse | null>(null);
   const [drawError, setDrawError] = useState<string | null>(null);
@@ -110,6 +170,12 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
         budget: budget ? Number(budget) : null,
         deliveryMode: mode,
         previewLimit: Number(previewLimit) || 3,
+        allowSelfDraw,
+        // datetime-local has no timezone; interpret as local, send ISO.
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        pairsVisibleAt: pairsVisibleAt
+          ? new Date(pairsVisibleAt).toISOString()
+          : null,
       }),
     });
     setRunning(false);
@@ -124,6 +190,38 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-md border p-1 text-sm">
+        <button
+          type="button"
+          onClick={() => setTab("santa")}
+          className={cn(
+            "flex-1 rounded-sm px-3 py-1.5 font-medium transition-colors",
+            tab === "santa"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Secret Santa
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("technical")}
+          className={cn(
+            "flex-1 rounded-sm px-3 py-1.5 font-medium transition-colors",
+            tab === "technical"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Technical
+        </button>
+      </div>
+
+      {tab === "technical" && <OgSettingsForm initial={og} />}
+
+      {tab === "santa" && (
+        <>
       {/* Participants */}
       <Card>
         <CardHeader>
@@ -134,29 +232,83 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           <ul className="space-y-2">
-            {participants.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-              >
-                <span>
-                  {p.name}
-                  {p.phone ? (
-                    <span className="text-muted-foreground"> · {p.phone}</span>
-                  ) : (
-                    <span className="text-muted-foreground"> · no phone</span>
-                  )}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => delParticipant(p.id)}
-                  aria-label="Remove"
+            {participants.map((p) => {
+              const linkedUser = p.userId ? userById.get(p.userId) : undefined;
+              return (
+                <li
+                  key={p.id}
+                  className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <Trash2 className="text-destructive" />
-                </Button>
-              </li>
-            ))}
+                  <div className="min-w-0">
+                    <span>
+                      {p.name}
+                      {p.phone ? (
+                        <span className="text-muted-foreground"> · {p.phone}</span>
+                      ) : (
+                        <span className="text-muted-foreground"> · no phone</span>
+                      )}
+                    </span>
+                    <div className="mt-0.5 flex items-center gap-1 text-xs">
+                      {linkedUser ? (
+                        <>
+                          <LinkIcon className="size-3 text-primary" />
+                          <span className="text-muted-foreground">
+                            {linkedUser.email}
+                          </span>
+                          <button
+                            type="button"
+                            className="ml-1 underline text-muted-foreground hover:text-foreground"
+                            onClick={() => linkParticipant(p.id, null)}
+                          >
+                            unlink
+                          </button>
+                        </>
+                      ) : p.userId ? (
+                        <span className="text-muted-foreground">
+                          linked account (not found)
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">no account</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!p.userId && (
+                      <Select
+                        value=""
+                        onValueChange={(v) => linkParticipant(p.id, v)}
+                        disabled={linkableUsers.length === 0}
+                      >
+                        <SelectTrigger className="h-8 w-40 text-xs">
+                          <SelectValue
+                            placeholder={
+                              linkableUsers.length === 0
+                                ? "No free accounts"
+                                : "Link account…"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {linkableUsers.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name} ({u.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => delParticipant(p.id)}
+                      aria-label="Remove"
+                    >
+                      <Trash2 className="text-destructive" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           <form onSubmit={addParticipant} className="flex flex-col gap-2 sm:flex-row">
             <Input
@@ -294,7 +446,47 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
                   />
                 </div>
               )}
+              <div className="flex flex-col gap-2">
+                <Label>Schedule (optional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to run now. Future = runs + delivers
+                  automatically then.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Reveal pairs to everyone (optional)</Label>
+                <Input
+                  type="datetime-local"
+                  value={pairsVisibleAt}
+                  onChange={(e) => setPairsVisibleAt(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  When set, the full giver→receiver list becomes public (admin
+                  history + everyone&apos;s dashboard) at this time. Empty =
+                  never.
+                </p>
+              </div>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={allowSelfDraw}
+                onChange={(e) => setAllowSelfDraw(e.target.checked)}
+              />
+              <span>
+                Allow self-draw
+                <span className="text-muted-foreground">
+                  {" "}
+                  — a person may be matched to themselves
+                </span>
+              </span>
+            </label>
             <Button type="submit" disabled={running}>
               {running ? "Drawing…" : "Run draw 🎲"}
             </Button>
@@ -306,20 +498,43 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
 
           {result && (
             <div className="mt-4 space-y-3 rounded-md border p-4 text-sm">
-              <p className="font-medium">
-                Draw &quot;{result.draw.name}&quot; — {result.assignments} pairs.
-              </p>
-              {result.delivery && (
+              {result.scheduled ? (
+                <p className="font-medium">
+                  Draw &quot;{result.draw.name}&quot; scheduled for{" "}
+                  {result.scheduledAt
+                    ? new Date(result.scheduledAt).toLocaleString()
+                    : "later"}
+                  . It will run + deliver automatically.
+                </p>
+              ) : (
+                <p className="font-medium">
+                  Draw &quot;{result.draw.name}&quot; — {result.assignments}{" "}
+                  pairs.
+                </p>
+              )}
+              {result.delivery?.whatsapp && (
                 <p>
-                  WhatsApp: {result.delivery.sent} sent, {result.delivery.failed}{" "}
-                  failed.
-                  {result.delivery.errors.length > 0 && (
+                  WhatsApp: {result.delivery.whatsapp.sent} sent,{" "}
+                  {result.delivery.whatsapp.failed} failed.
+                  {result.delivery.whatsapp.errors.length > 0 && (
                     <ul className="mt-1 list-disc pl-5 text-destructive">
-                      {result.delivery.errors.map((er, i) => (
+                      {result.delivery.whatsapp.errors.map((er, i) => (
                         <li key={i}>{er}</li>
                       ))}
                     </ul>
                   )}
+                </p>
+              )}
+              {result.delivery?.email && (
+                <p>
+                  Email: {result.delivery.email.sent} sent,{" "}
+                  {result.delivery.email.failed} failed.
+                </p>
+              )}
+              {result.delivery?.push && (
+                <p>
+                  Push: {result.delivery.push.sent} sent,{" "}
+                  {result.delivery.push.failed} failed.
                 </p>
               )}
               {result.revealLinks && (
@@ -346,30 +561,118 @@ export function AdminPanel({ participants, exclusions, draws }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>Draw history</CardTitle>
-          <CardDescription>Past draws inform future pairings.</CardDescription>
+          <CardDescription>
+            Past draws inform future pairings. Pairs show here once their
+            reveal time has passed.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {draws.length === 0 ? (
+          {pairings.length === 0 ? (
             <p className="text-sm text-muted-foreground">No draws yet.</p>
           ) : (
-            <ul className="space-y-2 text-sm">
-              {draws.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between rounded-md border px-3 py-2"
-                >
-                  <span>{d.name}</span>
-                  <span className="text-muted-foreground">
-                    {d.deliveryMode}
-                    {d.budget != null ? ` · budget ${d.budget}` : ""} ·{" "}
-                    {new Date(d.createdAt).toLocaleDateString()}
-                  </span>
-                </li>
-              ))}
+            <ul className="space-y-3 text-sm">
+              {pairings.map(({ draw: d, pairs }) => {
+                const pending =
+                  d.status !== "completed" && d.scheduledAt != null;
+                const visible =
+                  d.pairsVisibleAt != null &&
+                  new Date(d.pairsVisibleAt).getTime() <= Date.now();
+                return (
+                  <li key={d.id} className="rounded-md border px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{d.name}</span>
+                      <span className="text-muted-foreground">
+                        {pending ? (
+                          <>
+                            scheduled ·{" "}
+                            {new Date(d.scheduledAt!).toLocaleString()}
+                          </>
+                        ) : (
+                          <>
+                            {d.deliveryMode}
+                            {d.budget != null ? ` · budget ${d.budget}` : ""} ·{" "}
+                            {new Date(
+                              d.executedAt ?? d.createdAt,
+                            ).toLocaleDateString()}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {!pending && (
+                      <div className="mt-1 text-xs">
+                        {d.pairsVisibleAt == null ? (
+                          <span className="text-muted-foreground">
+                            Pairs hidden (never revealed)
+                          </span>
+                        ) : visible ? (
+                          <ul className="mt-1 space-y-0.5">
+                            {pairs.map((p, i) => (
+                              <li key={i}>
+                                <span className="font-medium">{p.giver}</span>{" "}
+                                <span className="text-muted-foreground">→</span>{" "}
+                                {p.receiver}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            Pairs reveal{" "}
+                            {new Date(d.pairsVisibleAt).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
       </Card>
+
+      {/* Integrations status */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Integrations</CardTitle>
+          <CardDescription>
+            Configured via environment variables. Delivery/notifications only
+            fire for enabled channels.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-1 text-sm">
+            <li>
+              WhatsApp:{" "}
+              <IntegrationBadge on={integrations.whatsapp} /> (WA_API_TOKEN…)
+            </li>
+            <li>
+              Email (Resend): <IntegrationBadge on={integrations.email} />{" "}
+              (RESEND_API_KEY, RESEND_FROM)
+            </li>
+            <li>
+              Push (Web Push): <IntegrationBadge on={integrations.push} />{" "}
+              (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+        </>
+      )}
     </div>
+  );
+}
+
+function IntegrationBadge({ on }: { on: boolean }) {
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-xs font-medium",
+        on
+          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+          : "bg-muted text-muted-foreground",
+      )}
+    >
+      {on ? "enabled" : "not configured"}
+    </span>
   );
 }

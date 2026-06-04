@@ -104,7 +104,18 @@ export const draw = pgTable("draw", {
     .default("reveal"),
   // for `reveal` mode: max times a token may be viewed before it locks
   previewLimit: integer("preview_limit").notNull().default(3),
+  // when true, a participant may be assigned to give a gift to themselves
+  // (self-draw). Off by default — normal secret santa is a derangement.
+  allowSelfDraw: boolean("allow_self_draw").notNull().default(false),
   status: text("status").$type<DrawStatus>().notNull().default("draft"),
+  // If set and the draw is still a draft, the in-process scheduler runs +
+  // delivers the draw automatically at/after this time. Null = run now.
+  scheduledAt: timestamp("scheduled_at"),
+  // Set when the draw was actually executed (pairs assigned + delivered).
+  executedAt: timestamp("executed_at"),
+  // When the giver->receiver pairs become public (admin history + every
+  // participant's dashboard). Null = never reveal the full list.
+  pairsVisibleAt: timestamp("pairs_visible_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -155,9 +166,37 @@ export const wishlistItem = pgTable("wishlist_item", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/**
+ * A Web Push subscription (PWA notifications) owned by a user. One user
+ * may have several (multiple devices/browsers). `endpoint` is unique.
+ */
+export const pushSubscription = pgTable("push_subscription", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * Generic key/value app settings, edited at runtime from the admin panel.
+ * Currently holds OpenGraph / site metadata (title, description, icon,
+ * banner). One row per key.
+ */
+export const appSetting = pgTable("app_setting", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export type User = typeof user.$inferSelect;
 export type Participant = typeof participant.$inferSelect;
 export type Draw = typeof draw.$inferSelect;
 export type Assignment = typeof assignment.$inferSelect;
 export type Exclusion = typeof exclusion.$inferSelect;
 export type WishlistItem = typeof wishlistItem.$inferSelect;
+export type AppSetting = typeof appSetting.$inferSelect;
+export type PushSubscription = typeof pushSubscription.$inferSelect;

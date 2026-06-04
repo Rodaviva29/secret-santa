@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     "@better-auth/kysely-adapter",
     "kysely",
     "pg",
+    "web-push",
   ],
 };
 

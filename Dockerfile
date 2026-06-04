@@ -21,6 +21,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # NEXT_PUBLIC_* are inlined into the client bundle at build time.
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
 RUN npm run build
 # Bundle the migration runner into a single self-contained JS file so the
 # runtime image needs no extra node_modules for migrations.
@@ -38,9 +40,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
-# Next.js standalone server output. (No public/ dir in this project.)
+# Next.js standalone server output.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Static assets (PWA service worker, manifest icon, flags are bundled).
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Migration assets: SQL files + the bundled runner.
 COPY --from=builder /app/drizzle ./drizzle
