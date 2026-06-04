@@ -38,7 +38,7 @@ export default function SignupPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setError(data?.error ?? "Erro ao criar conta.");
+      setError(data?.error ?? "Could not create account.");
       return;
     }
 
@@ -50,20 +50,19 @@ export default function SignupPage() {
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Criar conta</CardTitle>
+          <CardTitle>Create account</CardTitle>
           <CardDescription>
-            Usa o número de telemóvel com que foste adicionado(a) pelo
-            administrador.
+            Use the phone number the administrator added you with.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="phone">Telemóvel</Label>
+              <Label htmlFor="phone">Phone</Label>
               <PhoneInput value={phone} onChange={setPhone} required />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Nome</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
                 required
@@ -94,12 +93,12 @@ export default function SignupPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" disabled={loading || !phone}>
-              {loading ? "A criar conta…" : "Criar conta"}
+              {loading ? "Creating account…" : "Create account"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Já tens conta?{" "}
+              Already have an account?{" "}
               <Link href="/login" className="underline">
-                Entrar
+                Sign in
               </Link>
             </p>
           </form>

@@ -84,7 +84,7 @@ export function AdminPanel({
   integrations,
 }: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<"santa" | "technical">("santa");
+  const [tab, setTab] = useState<"santa" | "draw" | "technical">("santa");
   const [historyOpenId, setHistoryOpenId] = useState<number | null>(null);
   const nameById = new Map(participants.map((p) => [p.id, p.name]));
   const userById = new Map(users.map((u) => [u.id, u]));
@@ -158,12 +158,10 @@ export function AdminPanel({
   /* -------- run draw -------- */
   const [drawName, setDrawName] = useState("");
   const [budget, setBudget] = useState("");
-  // Delivery channels (any combination).
-  const [deliverReveal, setDeliverReveal] = useState(true);
+  // Delivery channels (any combination). The reveal page is always generated.
   const [deliverWhatsapp, setDeliverWhatsapp] = useState(false);
   const [deliverEmail, setDeliverEmail] = useState(false);
   const [deliverPush, setDeliverPush] = useState(false);
-  const [previewLimit, setPreviewLimit] = useState("3");
   const [allowSelfDraw, setAllowSelfDraw] = useState(false);
   const [historyDepth, setHistoryDepth] = useState("0");
   // datetime-local strings ("" = unset)
@@ -184,11 +182,11 @@ export function AdminPanel({
       body: JSON.stringify({
         name: drawName || "Secret Santa",
         budget: budget ? Number(budget) : null,
-        deliverReveal,
+        // Reveal page is always generated; channels below are opt-in.
+        deliverReveal: true,
         deliverWhatsapp,
         deliverEmail,
         deliverPush,
-        previewLimit: Number(previewLimit) || 3,
         allowSelfDraw,
         historyDepth: Number(historyDepth) || 0,
         // datetime-local has no timezone; interpret as local, send ISO.
@@ -222,7 +220,19 @@ export function AdminPanel({
               : "text-muted-foreground hover:text-foreground",
           )}
         >
-          Secret Santa
+          Participants
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("draw")}
+          className={cn(
+            "flex-1 rounded-sm px-3 py-1.5 font-medium transition-colors",
+            tab === "draw"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Draw
         </button>
         <button
           type="button"
@@ -442,7 +452,11 @@ export function AdminPanel({
           </form>
         </CardContent>
       </Card>
+        </>
+      )}
 
+      {tab === "draw" && (
+        <>
       {/* Run draw */}
       <Card>
         <CardHeader>
@@ -476,12 +490,6 @@ export function AdminPanel({
               <div className="flex flex-col gap-2 sm:col-span-2">
                 <Label>Delivery channels</Label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <DeliveryCheckbox
-                    label="Reveal link"
-                    hint="Private reveal page (always generated)"
-                    checked={deliverReveal}
-                    onChange={setDeliverReveal}
-                  />
                   <DeliveryCheckbox
                     label="WhatsApp"
                     hint={
@@ -517,17 +525,6 @@ export function AdminPanel({
                   />
                 </div>
               </div>
-              {deliverReveal && (
-                <div className="flex flex-col gap-2">
-                  <Label>Preview limit</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={previewLimit}
-                    onChange={(e) => setPreviewLimit(e.target.value)}
-                  />
-                </div>
-              )}
               <div className="flex flex-col gap-2">
                 <Label>Avoid past pairings (draws)</Label>
                 <Input
