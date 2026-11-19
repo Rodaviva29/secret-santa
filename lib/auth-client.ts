@@ -7,4 +7,5 @@ export const authClient = createAuthClient({
   plugins: [adminClient()],
 });
 
-export const { signIn, signUp, signOut, useSession } = authClient;
+// No `signUp` export: account creation goes through /api/signup only.
+export const { signIn, signOut, useSession } = authClient;

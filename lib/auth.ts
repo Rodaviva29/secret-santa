@@ -6,6 +6,21 @@ import { nextCookies } from "better-auth/next-js";
 import { count } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 
+/**
+ * Admin bootstrap rule. If ADMIN_EMAIL is set, only that address is an
+ * admin; otherwise the very first registered user is. (With ADMIN_EMAIL set,
+ * "first user wins" is disabled so a stranger reaching a fresh install can't
+ * claim the admin role.) Shared by the user-create hook (role) and the
+ * signup route (which lets a bootstrap admin register without having been
+ * added as a participant first).
+ */
+export async function isBootstrapAdmin(email: string): Promise<boolean> {
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  if (adminEmail) return email.trim().toLowerCase() === adminEmail;
+  const users = (await db.select({ c: count() }).from(schema.user))[0]?.c ?? 0;
+  return users === 0;
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -25,15 +40,9 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        // Bootstrap an admin: the very first registered user, or anyone
-        // matching ADMIN_EMAIL, is promoted to the `admin` role.
+        // Bootstrap an admin — see isBootstrapAdmin.
         async before(user) {
-          const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
-          const isFirstUser =
-            (await db.select({ c: count() }).from(schema.user))[0]?.c === 0;
-          const isAdmin =
-            isFirstUser ||
-            (!!adminEmail && user.email.toLowerCase() === adminEmail);
+          const isAdmin = await isBootstrapAdmin(user.email);
           return { data: { ...user, role: isAdmin ? "admin" : "user" } };
         },
       },

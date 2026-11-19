@@ -33,7 +33,7 @@ Rewritten from the ground up: from an Express prototype → **Next.js 16 · Reac
 
 | | Feature | What it does |
 |:--:|:--|:--|
-| 🔐 | **Accounts** | Email/password login (Better Auth). The first user (or `ADMIN_EMAIL`) becomes admin automatically. |
+| 🔐 | **Accounts** | Email/password login (Better Auth). The `ADMIN_EMAIL` account (or, if unset, the first user) becomes admin automatically. |
 | 📝 | **Wishlists** | Each participant lists what they'd like to receive — their santa sees it all. |
 | 🚫 | **Exclusions** | Forbidden pairs (couples, siblings) never draw each other. |
 | 💰 | **Budget** | Optional per-draw budget, shown on the reveal page. |
